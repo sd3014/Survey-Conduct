@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Survey Insight Analyzer</title>
+  <style>
+    @font-face {
+      font-family: 'NirmalaUI';
+      src: local('Nirmala UI'), url('https://fonts.gstatic.com/s/notoSansDevanagari/v14/LYjDdG_2vZLZrBX5DZTbXPWxDI_QK7EjF1XHjq9b.woff2') format('woff2');
+    }
+    body, h1, h2, h3, label, input, button, canvas {
+      font-family: 'NirmalaUI', 'Noto Sans Devanagari', sans-serif;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f2f2f2;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 1000px;
+      width: 100%;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 25px;
+    }
+    label {
+      font-weight: bold;
+    }
+    textarea, input[type="file"] {
+      width: 100%;
+      font-size: 16px;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    textarea {
+      height: 80px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin-top: 10px;
+      margin-right: 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .btn-green {
+      background-color: #28a745;
+    }
+    .btn-green:hover {
+      background-color: #1e7e34;
+    }
+    .answer-box {
+      margin-top: 30px;
+      white-space: pre-wrap;
+      background: #f0f0f0;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .chart-preview {
+      margin-top: 20px;
+      text-align: center;
+    }
+    .btn-group {
+      margin-top: 30px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Survey Insight Analyzer</h1>
+
+    <form id="uploadForm" enctype="multipart/form-data">
+      <label>Upload Survey (.xlsx)</label><br>
+      <input type="file" id="fileInput" name="file" required>
+      <button type="submit">Upload</button>
+    </form>
+
+    <textarea id="question" placeholder="Ask your question based on the survey data..."></textarea>
+    <button onclick="askQuestion()">Ask Question</button>
+
+    <div class="answer-box" id="answer"></div>
+    <div class="chart-preview" id="chart"></div>
+
+    <div class="btn-group">
+      <button class="btn-green" onclick="downloadCustomReport()">Download Custom Report</button>
+      <button class="btn-green" onclick="downloadCompleteReport()">Download Complete Report</button>
+    </div>
+  </div>
+
+  <script>
+    let lastAnswerData = null; // Store the last Q&A to allow "Save to Report"
+
+    document.getElementById("uploadForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById("fileInput");
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      fetch("/upload", {
+        method: "POST",
+        body: formData
+      }).then(res => res.json()).then(data => {
+        if (data.status === "success") {
+          alert("✅ Survey uploaded successfully!");
+        } else {
+          alert("⚠️ Upload failed: " + data.message);
+        }
+      });
+    });
+
+    function askQuestion() {
+      const question = document.getElementById("question").value.trim();
+      if (!question) {
+        alert("⚠️ Please enter a question.");
+        return;
+      }
+
+      document.getElementById("answer").innerText = "⏳ Processing your question...";
+      document.getElementById("chart").innerHTML = "";
+
+      fetch("/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, include: false })  // default: don't include in report
+      })
+      .then(res => res.json())
+      .then(data => {
+        lastAnswerData = { question, include: true };  // store for saving
+        document.getElementById("answer").innerHTML = `
+          <strong>Answer:</strong><br><br>${data.answer}
+          <br><br>
+          <button onclick="saveToCustomReport()" id="saveBtn">✅ Save to Custom Report</button>
+          <span id="saveStatus" style="margin-left: 15px; color: green;"></span>
+        `;
+        document.getElementById("chart").innerHTML = data.chart
+          ? `<div style="margin-top: 20px;"><img src="${data.chart}" style="max-width: 100%; height: auto; border: 1px solid #ccc;" alt="Chart"></div>`
+          : "";
+      });
+    }
+
+    function saveToCustomReport() {
+      if (!lastAnswerData) return;
+
+      fetch("/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lastAnswerData })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const saveStatus = document.getElementById("saveStatus");
+        const saveBtn = document.getElementById("saveBtn");
+        saveStatus.textContent = "Saved to custom report!";
+        saveBtn.disabled = true;
+        saveBtn.textContent = "✅ Saved";
+        saveBtn.style.backgroundColor = "#28a745";
+      })
+      .catch(err => {
+        const saveStatus = document.getElementById("saveStatus");
+        saveStatus.style.color = "red";
+        saveStatus.textContent = "❌ Failed to save";
+      });
+    }
+
+    function downloadCustomReport() {
+      window.location.href = "/download_custom_report";
+    }
+
+    function downloadCompleteReport() {
+      window.location.href = "/download_complete_report";
+    }
+  </script>
+
+</body>
+</html>
